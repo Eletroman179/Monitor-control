@@ -9,11 +9,3 @@ This is a Flask-based web application that allows users to execute Python code a
 - **404 Error Page**: Custom error handling for invalid routes, showing a user-friendly 404 page.
 - **About Page**: A dedicated About page for the application.
   
-## Installation
-
-### 1. Clone the Repository
-
-To get started, clone this repository to your local machine:
-
-```bash
-git clone https://github.com/your-username/python-code-executor-with-buttons.git
