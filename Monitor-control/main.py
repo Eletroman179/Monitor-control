@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, redirect
 import pyautogui
 import sys
 import os
@@ -70,6 +70,12 @@ buttons = [
     {"label": "reboot computer", "function": reboot},
     {"label": "close window", "function": close_active_window}
 ]
+
+# Route to redirect to GitHub repository
+@app.route("/github")
+def github():
+    return redirect("https://github.com/Eletroman179/Monitor-control/")
+
 
 # Route for the About page
 @app.route('/about')
