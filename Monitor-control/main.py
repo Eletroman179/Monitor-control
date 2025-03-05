@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, jsonify, redirect
+import pygetwindow as gw
 import pyautogui
 import sys
 import os
@@ -10,7 +11,6 @@ import win32process
 
 app = Flask(__name__)
 
-# Define the functions to run when buttons are clicked
 def close_active_window():
     """Closes the active window while checking not_close rules"""
     try:
@@ -20,17 +20,21 @@ def close_active_window():
 
         window_title = active_window.title.lower()
 
-        # Default: Close other windows
+        # Default: Close the active window
         hwnd = win32gui.GetForegroundWindow()
         _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        
         try:
+            # Attempt to terminate the process gracefully
             h_process = win32api.OpenProcess(win32con.PROCESS_TERMINATE, False, pid)
             win32api.TerminateProcess(h_process, -1)
             win32api.CloseHandle(h_process)
         except Exception:
+            # Fallback to using taskkill in case of error with graceful termination
             os.system(f"taskkill /PID {pid} /F")
 
-    except Exception:
+    except Exception as e:
+        print(f"Error occurred: {e}")  # Optional: for debugging purposes
         return  # Catch all other errors silently
 
 def shutdown():
