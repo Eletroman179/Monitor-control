@@ -19,21 +19,6 @@ def close_active_window():
             return  # No active window found
 
         window_title = active_window.title.lower()
-        for app, behavior in not_close.items():
-            if app in window_title:
-                if behavior["use"]:
-                    if behavior["action"] == "close":
-                        hwnd = win32gui.GetForegroundWindow()
-                        _, pid = win32process.GetWindowThreadProcessId(hwnd)
-                        try:
-                            h_process = win32api.OpenProcess(win32con.PROCESS_TERMINATE, False, pid)
-                            win32api.TerminateProcess(h_process, -1)
-                            win32api.CloseHandle(h_process)
-                        except Exception:
-                            pyautogui.hotkey("alt", "f4")
-                    elif behavior["action"] == "shutdown":
-                        os.system("shutdown /s /t 0")
-                return
 
         # Default: Close other windows
         hwnd = win32gui.GetForegroundWindow()
@@ -113,10 +98,12 @@ def run_button_function():
     button_function = request.form['function']
     print(f"Received function: {button_function}")  # Debugging line
     
-    if button_function == "def1":
-        result = run_def1()
-    elif button_function == "def2":
-        result = run_def2()
+    if button_function == "shutdown":
+        result = shutdown()
+    elif button_function == "reboot":
+        result = reboot()
+    elif button_function == "close_active_window":
+        result = close_active_window()
     else:
         result = "Unknown function"
     
