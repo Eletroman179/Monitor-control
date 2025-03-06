@@ -16,6 +16,8 @@ if platform.system() == "Windows":
     import win32gui
     import win32process
 
+os.chdir(os.path.dirname(__file__))
+
 app = Flask(__name__)
 
 def remove_ansi_codes(text):
@@ -69,6 +71,9 @@ class StreamToLogger:
 
 sys.stdout = StreamToLogger(logging.getLogger(), logging.INFO)
 sys.stderr = StreamToLogger(logging.getLogger(), logging.ERROR)
+
+def egg():
+    print("You found this cool good! this is a def called egg()")
 
 # Function to close the active window
 def close_active_window():
