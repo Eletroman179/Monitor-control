@@ -3,137 +3,192 @@ import pyautogui
 import sys
 import os
 import io
-import win32api
-import win32con
-import win32gui
-import win32process
+import logging
 import socket
 import uuid
+import platform
+import re
+
+# Windows-specific imports
+if platform.system() == "Windows":
+    import win32api
+    import win32con
+    import win32gui
+    import win32process
 
 app = Flask(__name__)
 
-# Define the functions to run when buttons are clicked
+def remove_ansi_codes(text):
+    # This pattern matches ANSI escape sequences
+    ansi_escape = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
+    return ansi_escape.sub('', text)
+
+# Configure logging
+logging.basicConfig(
+    filename="Logs.log",  # Save logs to a file
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+
+# Custom Formatter that removes ANSI codes after formatting the log record
+class RemoveAnsiFormatter(logging.Formatter):
+    def format(self, record):
+        formatted = super().format(record)
+        return remove_ansi_codes(formatted)
+
+# Apply the custom formatter to all handlers of the root logger
+root_logger = logging.getLogger()
+for handler in root_logger.handlers:
+    # Preserve the original format and datefmt if set; otherwise, use defaults.
+    fmt = handler.formatter._fmt if handler.formatter else "%(asctime)s - %(levelname)s - %(message)s"
+    datefmt = handler.formatter.datefmt if handler.formatter and hasattr(handler.formatter, 'datefmt') else None
+    handler.setFormatter(RemoveAnsiFormatter(fmt, datefmt))
+
+# Also apply the formatter to the Werkzeug logger (used by Flask for request logs)
+werkzeug_logger = logging.getLogger('werkzeug')
+for handler in werkzeug_logger.handlers:
+    fmt = handler.formatter._fmt if handler.formatter else "%(asctime)s - %(levelname)s - %(message)s"
+    datefmt = handler.formatter.datefmt if handler.formatter and hasattr(handler.formatter, 'datefmt') else None
+    handler.setFormatter(RemoveAnsiFormatter(fmt, datefmt))
+
+# Redirect stdout and stderr to logging
+class StreamToLogger:
+    def __init__(self, logger, level):
+        self.logger = logger
+        self.level = level
+        self.linebuf = ""
+        
+    def write(self, message):
+        if isinstance(message, bytes):
+            message = message.decode("utf-8", "ignore")
+        if message.strip():
+            self.logger.log(self.level, remove_ansi_codes(message).strip())
+            
+    def flush(self):
+        pass
+
+sys.stdout = StreamToLogger(logging.getLogger(), logging.INFO)
+sys.stderr = StreamToLogger(logging.getLogger(), logging.ERROR)
+
+# Function to close the active window
 def close_active_window():
-    """Closes the active window while checking not_close rules"""
+    """Closes the active window."""
+    if platform.system() != "Windows":
+        return "Functionality only available on Windows."
+
     try:
-        active_window = gw.getActiveWindow()
-        if not active_window:
-            return  # No active window found
-
-        window_title = active_window.title.lower()
-
-        # Default: Close other windows
         hwnd = win32gui.GetForegroundWindow()
-        _, pid = win32process.GetWindowThreadProcessId(hwnd)
-        try:
+        if hwnd:
+            _, pid = win32process.GetWindowThreadProcessId(hwnd)
             h_process = win32api.OpenProcess(win32con.PROCESS_TERMINATE, False, pid)
             win32api.TerminateProcess(h_process, -1)
             win32api.CloseHandle(h_process)
-        except Exception:
-            os.system(f"taskkill /PID {pid} /F")
+            return "Active window closed successfully."
+        else:
+            return "No active window found."
+    except Exception as e:
+        logging.error(f"Error closing window: {e}")
+        return f"Error: {e}"
 
-    except Exception:
-        return  # Catch all other errors silently
-
+# Shutdown function
 def shutdown():
-    print("shuting down")
-    os.system("shutdown /s /t 0")
-    return "The computer has been shut down!"
+    logging.info("Shutting down the system.")
+    command = "shutdown /s /t 0" if platform.system() == "Windows" else "sudo shutdown now"
+    os.system(command)
+    return "The computer is shutting down."
 
+# Reboot function
 def reboot():
-    print("rebooting")
-    os.system("shutdown /r /t 0")
-    return "The computer has been rebooted!"
+    logging.info("Rebooting the system.")
+    command = "shutdown /r /t 0" if platform.system() == "Windows" else "sudo reboot"
+    os.system(command)
+    return "The computer is rebooting."
 
+# Alt + F4 function
 def F4():
-    print("Wow you saw this you like python? python web \033]8;;https://www.python.org/\033\\here\033]8;;\033\\ you found a easter egg!")
-    pyautogui.hotkey('alt', 'F4')
-    return "The window has been shutdown!"
+    logging.info("Closing window using Alt + F4.")
+    pyautogui.hotkey("alt", "F4")
+    return "The active window has been closed."
 
-
-# List of buttons and their corresponding functions
-buttons = [
-    {"label": "shutdown computer", "function": shutdown},
-    {"label": "reboot computer", "function": reboot},
-    {"label": "close window", "function": close_active_window}
-]
-
-# Route to redirect to GitHub repository
-@app.route("/github")
-def github():
-    return redirect("https://github.com/Eletroman179/Monitor-control/")
-
-
-# Route for the About page
-@app.route('/about')
-def about():
-    return render_template('about.html')  # Your about page HTML
-
-# Function to get IP address
+# Retrieve IP address
 def get_ip_address():
     try:
-        hostname = socket.gethostname()
-        ip_address = socket.gethostbyname(hostname)
-        return ip_address
+        return socket.gethostbyname(socket.gethostname())
     except Exception as e:
-        return f"Error: {e}"
+        logging.error(f"Error retrieving IP: {e}")
+        return "Unknown IP"
 
-# Function to get MAC address
+# Retrieve MAC address
 def get_mac_address():
     try:
-        mac = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xFF) for elements in range(0, 2 * 6, 8)][::-1])
+        mac = ":".join(["{:02x}".format((uuid.getnode() >> i) & 0xFF) for i in range(0, 2 * 6, 8)][::-1])
         return mac
     except Exception as e:
-        return f"Error: {e}"
+        logging.error(f"Error retrieving MAC address: {e}")
+        return "Unknown MAC"
 
+# Button configuration
+button_functions = {
+    "shutdown": shutdown,
+    "reboot": reboot,
+    "close_active_window": close_active_window,
+}
+
+buttons = [{"label": label.replace("_", " ").title(), "function": func} for label, func in button_functions.items()]
+
+# Home route
 @app.route("/")
 def home():
-    ip_address = get_ip_address()
-    mac_address = get_mac_address()
-    return render_template("index.html", buttons=buttons, ip=ip_address, mac=mac_address)
+    return render_template("index.html", buttons=buttons, ip=get_ip_address(), mac=get_mac_address())
 
-# Route to execute Python code
+# Route for executing button functions dynamically
+@app.route("/run_button_function", methods=["POST"])
+def run_button_function():
+    button_function = request.form.get("function")
+    logging.info(f"Received function: {button_function}")
+
+    func = button_functions.get(button_function)
+    if func:
+        result = func()
+    else:
+        result = "Unknown function."
+
+    return jsonify({"message": result})
+
+# Secure execution of Python code
 @app.route("/run_code", methods=["POST"])
 def run_code():
-    user_code = request.form['code']  # Get code from the textbox
+    user_code = request.form.get("code", "")
+    logging.info("User submitted Python code for execution.")
 
-    # Capture the output (stdout)
+    # Redirect standard output to capture execution results
     captured_output = io.StringIO()
     sys.stdout = captured_output
 
     try:
-        # Execute the user code
-        exec(user_code)
+        exec(user_code)  # Note: Be cautious with exec and consider security implications
         result = captured_output.getvalue()
     except Exception as e:
         result = f"Error: {e}"
 
-    # Reset stdout
-    sys.stdout = sys.__stdout__
-
+    sys.stdout = sys.__stdout__  # Reset standard output
     return jsonify({"message": result})
 
-@app.route("/run_button_function", methods=["POST"])
-def run_button_function():
-    button_function = request.form['function']
-    print(f"Received function: {button_function}")  # Debugging line
-    
-    if button_function == "shutdown":
-        result = shutdown()
-    elif button_function == "reboot":
-        result = reboot()
-    elif button_function == "close_active_window":
-        result = close_active_window()
-    else:
-        result = "Unknown function"
-    
-    return jsonify({"message": result})
+# GitHub redirect
+@app.route("/github")
+def github():
+    return redirect("https://github.com/Eletroman179/Monitor-control/")
 
-# 404 Error page
+# About page
+@app.route("/about")
+def about():
+    return render_template("about.html")
+
+# Custom 404 page
 @app.errorhandler(404)
 def page_not_found(error):
-    return render_template('404.html'), 404
+    return render_template("404.html"), 404
 
-
+# Run the Flask app
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
