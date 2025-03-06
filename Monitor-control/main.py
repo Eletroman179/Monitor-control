@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, jsonify, redirect
+from functools import wraps
 import pyautogui
 import sys
 import os
@@ -8,6 +9,7 @@ import socket
 import uuid
 import platform
 import re
+import time
 
 # Windows-specific imports
 if platform.system() == "Windows":
@@ -72,10 +74,45 @@ class StreamToLogger:
 sys.stdout = StreamToLogger(logging.getLogger(), logging.INFO)
 sys.stderr = StreamToLogger(logging.getLogger(), logging.ERROR)
 
+def log_func(func):
+    @wraps(func)  # Ensure the original function name and signature are preserved
+    def wrapper(*args, **kwargs):
+        start_time = time.time()
+        logging.info(f"Starting function: {func.__name__}()")
+        
+        # Call the function
+        result = func(*args, **kwargs)
+        
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        
+        logging.info(f"Function: {func.__name__}() completed in {elapsed_time:.4f} seconds.")
+        
+        return result
+    return wrapper
+
+@log_func
 def egg():
     print("You found this cool good! this is a def called egg()")
 
+@log_func
+def wait(stop):
+    time.sleep(stop)
+
+@log_func
+def clear_log():
+    with open("Logs.log", "w") as file:
+        file.write("")
+    print("Log cleared.")
+
+@log_func
+def test():
+    for i in range(10):
+        print(i+1)
+        time.sleep(0.1)
+
 # Function to close the active window
+@log_func
 def close_active_window():
     """Closes the active window."""
     if platform.system() != "Windows":
@@ -96,6 +133,7 @@ def close_active_window():
         return f"Error: {e}"
 
 # Shutdown function
+@log_func
 def shutdown():
     logging.info("Shutting down the system.")
     command = "shutdown /s /t 0" if platform.system() == "Windows" else "sudo shutdown now"
@@ -103,6 +141,7 @@ def shutdown():
     return "The computer is shutting down."
 
 # Reboot function
+@log_func
 def reboot():
     logging.info("Rebooting the system.")
     command = "shutdown /r /t 0" if platform.system() == "Windows" else "sudo reboot"
@@ -110,12 +149,14 @@ def reboot():
     return "The computer is rebooting."
 
 # Alt + F4 function
+@log_func
 def F4():
     logging.info("Closing window using Alt + F4.")
     pyautogui.hotkey("alt", "F4")
     return "The active window has been closed."
 
 # Retrieve IP address
+@log_func
 def get_ip_address():
     try:
         return socket.gethostbyname(socket.gethostname())
@@ -124,6 +165,7 @@ def get_ip_address():
         return "Unknown IP"
 
 # Retrieve MAC address
+@log_func
 def get_mac_address():
     try:
         mac = ":".join(["{:02x}".format((uuid.getnode() >> i) & 0xFF) for i in range(0, 2 * 6, 8)][::-1])
@@ -148,6 +190,7 @@ def home():
 
 # Route for executing button functions dynamically
 @app.route("/run_button_function", methods=["POST"])
+@log_func
 def run_button_function():
     button_function = request.form.get("function")
     logging.info(f"Received function: {button_function}")
@@ -162,6 +205,7 @@ def run_button_function():
 
 # Secure execution of Python code
 @app.route("/run_code", methods=["POST"])
+@log_func
 def run_code():
     user_code = request.form.get("code", "")
     logging.info("User submitted Python code for execution.")
