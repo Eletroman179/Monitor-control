@@ -26,6 +26,7 @@
         </div>
 
 
+
         <!-- Output -->
         <div id="outputContainer" class="output-container">
             <p id="output">Output will be displayed here...</p>
@@ -35,6 +36,14 @@
         <br><br>
         <a href="/about"><button>About</button></a>
         <a href="/github"><button>Github</button></a>
+
+        <!-- The IP and MAC address -->
+        <div class="info-container dim-text">
+            <p><strong>Computer Info</strong></p>
+            <p><strong>IP Address:</strong> {{ ip }}</p>
+            <p><strong>MAC Address:</strong> {{ mac }}</p>
+        </div>
+        
     </div>
 
     <script>

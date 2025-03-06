@@ -1,5 +1,4 @@
 from flask import Flask, render_template, request, jsonify, redirect
-import pygetwindow as gw
 import pyautogui
 import sys
 import os
@@ -8,9 +7,12 @@ import win32api
 import win32con
 import win32gui
 import win32process
+import socket
+import uuid
 
 app = Flask(__name__)
 
+# Define the functions to run when buttons are clicked
 def close_active_window():
     """Closes the active window while checking not_close rules"""
     try:
@@ -20,21 +22,17 @@ def close_active_window():
 
         window_title = active_window.title.lower()
 
-        # Default: Close the active window
+        # Default: Close other windows
         hwnd = win32gui.GetForegroundWindow()
         _, pid = win32process.GetWindowThreadProcessId(hwnd)
-        
         try:
-            # Attempt to terminate the process gracefully
             h_process = win32api.OpenProcess(win32con.PROCESS_TERMINATE, False, pid)
             win32api.TerminateProcess(h_process, -1)
             win32api.CloseHandle(h_process)
         except Exception:
-            # Fallback to using taskkill in case of error with graceful termination
             os.system(f"taskkill /PID {pid} /F")
 
-    except Exception as e:
-        print(f"Error occurred: {e}")  # Optional: for debugging purposes
+    except Exception:
         return  # Catch all other errors silently
 
 def shutdown():
@@ -71,10 +69,28 @@ def github():
 def about():
     return render_template('about.html')  # Your about page HTML
 
-# Route for the homepage
+# Function to get IP address
+def get_ip_address():
+    try:
+        hostname = socket.gethostname()
+        ip_address = socket.gethostbyname(hostname)
+        return ip_address
+    except Exception as e:
+        return f"Error: {e}"
+
+# Function to get MAC address
+def get_mac_address():
+    try:
+        mac = ':'.join(['{:02x}'.format((uuid.getnode() >> elements) & 0xFF) for elements in range(0, 2 * 6, 8)][::-1])
+        return mac
+    except Exception as e:
+        return f"Error: {e}"
+
 @app.route("/")
 def home():
-    return render_template("index.html", buttons=buttons)
+    ip_address = get_ip_address()
+    mac_address = get_mac_address()
+    return render_template("index.html", buttons=buttons, ip=ip_address, mac=mac_address)
 
 # Route to execute Python code
 @app.route("/run_code", methods=["POST"])
@@ -117,6 +133,7 @@ def run_button_function():
 @app.errorhandler(404)
 def page_not_found(error):
     return render_template('404.html'), 404
+
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000, debug=True)
